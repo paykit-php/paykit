@@ -1,0 +1,32 @@
+{
+    "name": "paykit-php/paykit",
+    "description": "Unified API for multiple payment gateways in PHP.",
+    "type": "library",
+    "require": {
+        "php": "^8.3",
+        "php-collective/dto": "^0.1.17"
+    },
+    "require-dev": {
+        "symfony/var-dumper": "^8.0",
+        "friendsofphp/php-cs-fixer": "^3.95"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Paykit\\": "src/",
+            "Paykit\\Dto\\": "generated/Dto/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Yugo",
+            "email": "dedy.yugo.purwanto@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "scripts": {
+        "dto:generate": "vendor/bin/dto generate --src-path=generated/ --namespace=Paykit",
+        "dto:check": "vendor/bin/dto generate --src-path=generated/ --dry-run",
+        "cs:fix": "vendor/bin/php-cs-fixer fix"
+    }
+}
