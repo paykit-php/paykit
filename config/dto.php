@@ -63,9 +63,10 @@ return Schema::create()
             )
     )
     ->dto(
-        Dto::create('CreatePayment')
+        Dto::create('Purchase')
             ->fields(
                 Field::string('method')->required(),
+                Field::string('currency')->default('idr'),
                 Field::union('amount', 'int', 'float')->required(),
                 Field::string('orderId')->required(),
                 Field::string('channel'),

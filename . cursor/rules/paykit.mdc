@@ -89,7 +89,7 @@ The returned method code should be treated as the source of truth for payment cr
 
 Call:
 
-- `createPayment(CreatePaymentDto $payment): PaymentDto`
+- `purchase(PurchaseDto $purchase): PaymentDto`
 
 This is the main transaction creation step.
 
@@ -124,7 +124,7 @@ Always guard optional behavior with `instanceof`.
 Every gateway must implement `Paykit\Contracts\PaymentGatewayInterface` with:
 
 - `getMethods(int $amount = 0): MethodsDto`
-- `createPayment(CreatePaymentDto $payment): PaymentDto`
+- `purchase(PurchaseDto $purchase): PaymentDto`
 - `inquiry(string $orderId): PaymentDto`
 
 Do not invent extra required methods in the main gateway interface.
@@ -231,7 +231,7 @@ DTOs are the standard input/output format of the package.
 
 Common DTOs include:
 
-- `CreatePaymentDto`
+- `PurchaseDto`
 - `CustomerDto`
 - `UrlDto`
 - `MethodsDto`
@@ -412,7 +412,7 @@ A good explanation usually follows this order:
 2. register the driver
 3. resolve the driver
 4. get methods
-5. create payment
+5. purchase
 6. inquiry payment
 7. handle callback or redirect if supported
 8. read standardized DTO output and raw vendor response
