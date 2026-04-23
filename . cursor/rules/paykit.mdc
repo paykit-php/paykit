@@ -1,0 +1,474 @@
+# Paykit AI Rules
+
+## Purpose
+
+These rules help AI understand how to work with the `paykit` package correctly.
+
+Paykit is a **core payment gateway abstraction library** for PHP.
+It provides:
+
+- a shared gateway contract
+- shared payment status enum
+- shared generated DTOs
+- optional capability interfaces
+- a registry-based way to resolve drivers
+
+Paykit does **not** try to unify every vendor detail.
+It standardizes the common payment flow while keeping vendor-specific behavior inside each driver.
+
+---
+
+## High-Level Architecture
+
+### Core package responsibilities
+
+Core contains the shared abstractions used by all drivers:
+
+- `Paykit\Paykit`
+- `Paykit\Contracts\PaymentGatewayInterface`
+- capability interfaces under `Paykit\Contracts\Capabilities`
+- `Paykit\Contracts\Mappers\PaymentStatusMapperInterface`
+- `Paykit\Enums\PaymentStatus`
+- shared exceptions
+- generated DTOs under `Paykit\Dto`
+
+### Driver responsibilities
+
+A driver package is responsible for all vendor-specific behavior, including:
+
+- HTTP requests
+- signature generation and verification
+- request/response transformation
+- vendor status mapping
+- redirect or callback handling
+- optional balance or cancel support
+- preserving raw vendor response in returned DTOs
+
+### Separation rule
+
+- Put shared abstractions in core.
+- Put vendor logic in drivers.
+- Never move vendor-specific rules into core just because multiple drivers look similar.
+- Never make core aware of a specific provider.
+
+---
+
+## Main Usage Workflow
+
+When AI explains or writes example usage for Paykit, follow this lifecycle:
+
+### 1. Register a driver
+
+Create a `Paykit\Paykit` instance and register a named driver resolver.
+
+Typical pattern:
+
+- instantiate `Paykit`
+- call `register(string $name, callable $resolver)`
+- resolver returns an object implementing `PaymentGatewayInterface`
+
+### 2. Resolve the driver
+
+Use:
+
+- `driver(string $name): PaymentGatewayInterface`
+
+The registry resolves the driver by name.
+If the driver is not registered, resolution should fail through the registry exception flow.
+
+### 3. Get available payment methods
+
+Call:
+
+- `getMethods(int $amount = 0): MethodsDto`
+
+Use this to fetch available vendor payment methods.
+The returned method code should be treated as the source of truth for payment creation.
+
+### 4. Create a payment
+
+Call:
+
+- `createPayment(CreatePaymentDto $payment): PaymentDto`
+
+This is the main transaction creation step.
+
+### 5. Track or re-check payment state
+
+Call:
+
+- `inquiry(string $orderId): PaymentDto`
+
+Use inquiry to synchronize payment state from the vendor.
+
+### 6. Handle optional flows through capabilities
+
+Not every gateway supports every feature.
+Optional behavior is exposed through capability interfaces and must be checked first.
+
+Examples:
+
+- webhook callback handling
+- redirect return handling
+- cancellation
+- balance lookup
+
+Always guard optional behavior with `instanceof`.
+
+---
+
+## Public API That AI Must Respect
+
+### Required gateway contract
+
+Every gateway must implement `Paykit\Contracts\PaymentGatewayInterface` with:
+
+- `getMethods(int $amount = 0): MethodsDto`
+- `createPayment(CreatePaymentDto $payment): PaymentDto`
+- `inquiry(string $orderId): PaymentDto`
+
+Do not invent extra required methods in the main gateway interface.
+
+### Optional capability interfaces
+
+Use these exact capability interfaces when relevant:
+
+- `SupportsWebhook`
+- `SupportsRedirect`
+- `SupportsCancel`
+- `SupportsBalance`
+
+Use their actual methods:
+
+- `SupportsWebhook::callback(?array $payload): PaymentDto`
+- `SupportsRedirect::redirect(?array $payload, bool $shouldVerify = true): PaymentDto`
+- `SupportsCancel::cancelPayment(string $orderId): PaymentDto`
+- `SupportsBalance::getBalance(): BalanceDto`
+
+---
+
+## Payment Status Rules
+
+### Standardized status enum
+
+All payment status normalization must end in:
+
+- `Paykit\Enums\PaymentStatus`
+
+Available statuses are:
+
+- `Success`
+- `Pending`
+- `Failed`
+- `Expired`
+- `Cancelled`
+
+### Mapping responsibility
+
+Vendor status mapping belongs inside the driver.
+
+Use:
+
+- `Paykit\Contracts\Mappers\PaymentStatusMapperInterface`
+
+Expected mapper pattern:
+
+- driver receives vendor status
+- driver-specific mapper converts it to `PaymentStatus`
+- mapped enum is assigned to `PaymentDto`
+
+### Important boundary
+
+- Standardize payment status.
+- Do not standardize vendor method codes.
+- Do not flatten all vendor-specific payment details into fake generic fields.
+
+---
+
+## Payment Method Rules
+
+Payment method codes are vendor-owned.
+
+AI must follow these rules:
+
+- Use payment method codes exactly as returned by the vendor.
+- Do not normalize payment method codes in core.
+- Do not rename method codes for developer convenience.
+- When creating a payment, prefer using a method code taken from `getMethods()` output.
+- If a vendor distinguishes channels or sub-methods, keep that distinction in the driver and DTO usage.
+
+Good guidance:
+
+- fetch methods first
+- let user choose one returned by the gateway
+- send that exact code in `CreatePaymentDto`
+
+Bad guidance:
+
+- invent a universal code like `bank_transfer`
+- translate vendor code in core
+- assume method names are shared across providers
+
+---
+
+## DTO Rules
+
+### Generated DTOs
+
+DTO classes under `generated/Dto` are generated and exposed via the `Paykit\Dto` namespace.
+
+AI must assume:
+
+- these files are generated artifacts
+- they should not be edited manually unless the task explicitly targets generated output
+- if DTO schema changes, the generated output should be regenerated using the package workflow
+
+Do not casually rewrite generated DTO files.
+
+### DTO usage
+
+DTOs are the standard input/output format of the package.
+
+Common DTOs include:
+
+- `CreatePaymentDto`
+- `CustomerDto`
+- `UrlDto`
+- `MethodsDto`
+- `MethodDto`
+- `PaymentDto`
+- `PaymentDetailsDto`
+- `BalanceDto`
+
+### DTO access style
+
+Prefer getters for reading DTO data, such as:
+
+- `getItems()`
+- `getCode()`
+- `getName()`
+- `getStatus()`
+- `getPayment()`
+- `getRaw()`
+
+Do not encourage direct property access in examples when getter methods are available.
+
+### DTO mutability note
+
+Do not assume generated DTOs are deeply immutable.
+Treat them as structured DTO objects provided by the library.
+For application and driver code, prefer constructing them clearly and reading them consistently through their public API.
+
+---
+
+## Standardization Boundaries
+
+AI must understand what Paykit standardizes and what it does not.
+
+### Standardized by Paykit
+
+- gateway lifecycle shape
+- common gateway contract
+- optional capability contracts
+- payment status enum
+- shared DTO structure for methods, payment result, details, customer, URLs, and balance
+
+### Not standardized by Paykit
+
+- vendor payment method codes
+- vendor request signing rules
+- vendor endpoint structure
+- vendor-specific validation rules
+- vendor-specific callback payload shape
+- vendor-specific redirect query/body shape
+- vendor-specific raw response format
+
+### Raw response rule
+
+Always preserve original vendor response in `PaymentDto::getRaw()` when building driver responses.
+Raw vendor data is important for debugging and fallback use cases.
+
+---
+
+## Driver Implementation Guidance
+
+When AI helps create or edit a driver, follow this structure.
+
+### Minimum expected pieces
+
+A driver will usually contain:
+
+- gateway class
+- status mapper
+- HTTP client or request service
+- payload builders or transformers
+- signature helpers or support classes if needed
+
+Not every driver needs the exact same folders, but the responsibilities should remain clear.
+
+### Gateway responsibilities
+
+A gateway class should:
+
+- implement `PaymentGatewayInterface`
+- implement optional capability interfaces only if the vendor actually supports them
+- orchestrate requests and mapping
+- return Paykit DTOs, not raw arrays
+
+### Mapper responsibilities
+
+A mapper should:
+
+- transform vendor statuses to `PaymentStatus`
+- stay local to the driver
+- avoid leaking vendor wording into consumer-facing status output
+
+### HTTP responsibilities
+
+HTTP logic should remain inside the driver.
+Do not expose low-level HTTP clients through core abstractions.
+
+### Transformation responsibilities
+
+Transform request and response data inside the driver.
+Do not push vendor response parsing into app code.
+
+---
+
+## Callback and Redirect Guidance
+
+### Webhook callback flow
+
+If a gateway supports webhooks:
+
+- check `instanceof SupportsWebhook`
+- pass parsed payload to `callback(?array $payload)`
+- let the driver verify and map the payload
+- return a `PaymentDto`
+
+### Redirect flow
+
+If a gateway supports redirect return handling:
+
+- check `instanceof SupportsRedirect`
+- pass redirect payload to `redirect(?array $payload, bool $shouldVerify = true)`
+- use verification when the vendor flow requires it
+- return a `PaymentDto`
+
+### Important rule
+
+Do not assume callback payload and redirect payload are identical.
+Each vendor may structure them differently.
+Verification rules also belong inside the driver.
+
+---
+
+## Error Handling Guidance
+
+Use explicit package exceptions when appropriate.
+Prefer clear failure modes over silent fallback behavior.
+
+AI should preserve or introduce meaningful exceptions for cases like:
+
+- unsupported driver
+- invalid configuration
+- request failure
+- mapping failure
+- signature verification failure
+- unsupported feature
+
+Do not hide vendor or transport errors behind vague generic messages.
+
+---
+
+## Registry Rules
+
+Driver registration uses a resolver pattern.
+
+AI should understand:
+
+- `register()` stores a named resolver
+- `driver()` resolves that name to a gateway instance
+- the returned object must satisfy `PaymentGatewayInterface`
+
+Do not turn the registry into a service container clone.
+Keep resolution simple and explicit.
+
+---
+
+## Documentation Guidance for AI
+
+When AI writes docs or examples for Paykit:
+
+- show the real package workflow
+- use the exact current method names
+- separate core usage from vendor-specific examples
+- mention capability checks before optional methods
+- avoid promising cross-vendor behavior that Paykit does not guarantee
+
+A good explanation usually follows this order:
+
+1. install core and a driver package
+2. register the driver
+3. resolve the driver
+4. get methods
+5. create payment
+6. inquiry payment
+7. handle callback or redirect if supported
+8. read standardized DTO output and raw vendor response
+
+---
+
+## Code Generation Guidance
+
+If AI changes DTO definitions or generated schema sources:
+
+- do not hand-edit generated output unless explicitly required
+- prefer updating the source definition or generation input
+- regenerate generated DTOs using the project script/process afterward
+
+If only consuming DTOs:
+
+- use the existing `Paykit\Dto` classes
+- do not recreate duplicate DTO classes in drivers or apps
+
+---
+
+## What AI Should Avoid
+
+Do not:
+
+- add vendor-specific logic into core
+- rename or normalize payment method codes globally
+- invent extra required methods in `PaymentGatewayInterface`
+- use outdated capability method names
+- edit generated DTO files casually
+- expose raw HTTP clients as part of core API
+- claim every driver supports redirect, callback, cancel, or balance
+- remove raw vendor data from payment results
+- oversimplify vendor differences that materially affect behavior
+
+---
+
+## Preferred AI Style
+
+When generating Paykit-compatible code, prefer:
+
+- small, explicit classes
+- clear mapping logic
+- predictable DTO output
+- strict separation between core and driver concerns
+- straightforward examples that mirror the real package API
+
+Avoid unnecessary abstraction and speculative architecture.
+
+---
+
+## Goal
+
+Produce code and documentation that are:
+
+- accurate to the current Paykit API
+- easy for AI and humans to follow
+- safe for multi-driver payment integrations
+- maintainable as new drivers are added
